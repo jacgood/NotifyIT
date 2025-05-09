@@ -2,7 +2,7 @@
 set -e
 
 # Set default values for environment variables if not provided
-REACT_APP_BASE_URL=${REACT_APP_BASE_URL:-"http://localhost:3000"}
+REACT_APP_BASE_URL=${REACT_APP_BASE_URL:-"https://notifyit.local.good-it-solutions.com"}
 REACT_APP_AZURE_CLIENT_ID=${REACT_APP_AZURE_CLIENT_ID:-""}
 REACT_APP_AZURE_TENANT_ID=${REACT_APP_AZURE_TENANT_ID:-"common"}
 PORT=${PORT:-"3000"}

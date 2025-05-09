@@ -42,7 +42,10 @@ function App() {
     const handleUserInteraction = () => {
       console.log('User interaction detected, initializing audio');
       // Play a silent sound to initialize audio context
-      const soundPath = `${config.server.baseUrl}${config.notification.soundsPath}${config.notification.defaultSound}`;
+      // Always use the current origin to avoid mixed content issues
+      const origin = window.location.origin;
+      const soundPath = `${origin}${config.notification.soundsPath}${config.notification.defaultSound}`;
+      console.log('Initializing audio with path:', soundPath);
       const silentSound = new Audio(soundPath);
       silentSound.volume = 0.01; // Nearly silent
       const playPromise = silentSound.play();

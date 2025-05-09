@@ -39,17 +39,15 @@ export const requestNotificationPermission = async (): Promise<NotificationPermi
  */
 export const playNotificationSound = (soundFile: string, volume: number = 1.0): void => {
   try {
-    // Build the full path to the sound file - ensure we use the correct protocol
-    const baseUrl = SERVER_CONFIG.baseUrl || window.location.origin;
+    // Always use the current origin to avoid mixed content issues
+    const origin = window.location.origin;
     const soundsPath = NOTIFICATION_CONFIG.soundsPath;
     
-    // Make sure we're using the same protocol as the current page
-    let soundPath = `${baseUrl}${soundsPath}${soundFile}`;
+    // Build the path using the current origin
+    let soundPath = `${origin}${soundsPath}${soundFile}`;
     
-    // If we're on HTTPS but the URL is HTTP, upgrade it
-    if (window.location.protocol === 'https:' && soundPath.startsWith('http:')) {
-      soundPath = soundPath.replace('http:', 'https:');
-    }
+    // Log the sound path for debugging
+    console.log('Using current origin for sound path:', origin);
     
     console.log('Attempting to play sound from:', soundPath);
     
@@ -102,8 +100,9 @@ export const playNotificationSound = (soundFile: string, volume: number = 1.0): 
 const tryFallbackAudio = (soundFile: string, volume: number): void => {
   try {
     console.log('Trying fallback audio with relative path...');
-    // Try with a relative path
-    const relativePath = `/sounds/${soundFile}`;
+    // Use the current origin with a relative path
+    const origin = window.location.origin;
+    const relativePath = `${origin}/sounds/${soundFile}`;
     console.log('Fallback audio path:', relativePath);
     
     const fallbackAudio = new Audio(relativePath);
