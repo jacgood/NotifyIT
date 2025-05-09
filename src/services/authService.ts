@@ -72,23 +72,35 @@ let redirectHandled = false;
 // Try to initialize MSAL if supported
 if (isMsalSupported()) {
   try {
+    // Create the MSAL instance
     msalInstance = new msal.PublicClientApplication(msalConfig);
     console.log('MSAL instance created successfully');
     
-    // Handle the redirect promise when the page loads
-    // This ensures authentication state is properly restored after page refresh
-    if (!redirectHandled) {
-      redirectHandled = true;
-      msalInstance.handleRedirectPromise()
-        .then(response => {
-          if (response) {
-            console.log('Successfully handled redirect response', response);
+    // Initialize MSAL immediately
+    (async () => {
+      try {
+        if (msalInstance) {
+          await msalInstance.initialize();
+          msalInitialized = true;
+          console.log('MSAL initialized successfully on load');
+          
+          // Now that MSAL is initialized, handle any redirect
+          if (!redirectHandled) {
+            redirectHandled = true;
+            try {
+              const response = await msalInstance.handleRedirectPromise();
+              if (response) {
+                console.log('Successfully handled redirect response', response);
+              }
+            } catch (redirectError) {
+              console.error('Error handling redirect:', redirectError);
+            }
           }
-        })
-        .catch(error => {
-          console.error('Error handling redirect:', error);
-        });
-    }
+        }
+      } catch (initError) {
+        console.error('Error during automatic MSAL initialization:', initError);
+      }
+    })();
   } catch (error) {
     console.error('Failed to create MSAL instance:', error);
     msalInstance = null;
@@ -110,7 +122,15 @@ class AuthService {
    * Initialize MSAL
    */
   private async initializeMsal(): Promise<void> {
-    if (msalInitialized || !msalInstance) {
+    // If MSAL is not available, return early
+    if (!msalInstance) {
+      console.log('MSAL instance not available, skipping initialization');
+      return;
+    }
+
+    // If already initialized, just return
+    if (msalInitialized) {
+      console.log('MSAL already initialized');
       return;
     }
 
@@ -135,6 +155,12 @@ class AuthService {
     }
     
     try {
+      // Make sure MSAL is initialized before checking accounts
+      if (!msalInitialized) {
+        console.log('MSAL not yet initialized, cannot check authentication status');
+        return false;
+      }
+      
       const accounts = msalInstance.getAllAccounts();
       return accounts.length > 0;
     } catch (error) {
@@ -152,6 +178,12 @@ class AuthService {
     }
     
     try {
+      // Make sure MSAL is initialized before checking accounts
+      if (!msalInitialized) {
+        console.log('MSAL not yet initialized, cannot get current user');
+        return null;
+      }
+      
       const accounts = msalInstance.getAllAccounts();
       if (accounts.length === 0) {
         return null;
@@ -179,6 +211,11 @@ class AuthService {
       // Ensure MSAL is initialized before login
       await this.initializeMsal();
       
+      // Double-check initialization status
+      if (!msalInitialized) {
+        throw new Error('MSAL initialization failed');
+      }
+      
       if (useRedirect) {
         // Login with redirect (better for mobile and when popup is blocked)
         console.log('Using redirect login flow');
@@ -196,7 +233,7 @@ class AuthService {
       console.error('Error during login:', error);
       
       // If popup is blocked, try redirect flow
-      if (error instanceof Error && error.message.includes('popup')) {
+      if (error instanceof Error && error.message.includes('popup') && msalInstance && msalInitialized) {
         console.log('Popup blocked, trying redirect flow');
         try {
           await msalInstance.loginRedirect(loginRequest);
@@ -223,6 +260,15 @@ class AuthService {
     }
     
     try {
+      // Ensure MSAL is initialized
+      await this.initializeMsal();
+      
+      // Double-check initialization status
+      if (!msalInitialized) {
+        console.warn('MSAL not initialized, cannot logout');
+        return;
+      }
+      
       const logoutRequest = {
         account: this.getCurrentUser(),
         postLogoutRedirectUri: window.location.origin,
@@ -243,7 +289,7 @@ class AuthService {
       console.error('Error during logout:', error);
       
       // If popup is blocked, try redirect flow
-      if (error instanceof Error && error.message.includes('popup') && !useRedirect) {
+      if (error instanceof Error && error.message.includes('popup') && !useRedirect && msalInstance && msalInitialized) {
         console.log('Popup blocked, trying redirect flow');
         try {
           await msalInstance.logoutRedirect({
@@ -287,7 +333,7 @@ class AuthService {
       console.error('Error getting access token:', error);
       
       // If silent token acquisition fails, try interactive
-      if (error instanceof msal.InteractionRequiredAuthError) {
+      if (error instanceof msal.InteractionRequiredAuthError && msalInstance && msalInitialized) {
         try {
           const response = await msalInstance.acquireTokenPopup(loginRequest);
           return response.accessToken;
