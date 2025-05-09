@@ -8,6 +8,7 @@ import { requestNotificationPermission, playNotificationSound, showNotification 
 import { loadNotificationSettings, saveNotificationSettings, loadEmailFilters, saveEmailFilters } from './utils/storage';
 import { emailService } from './services/emailService';
 import { exchangeEmailService } from './services/exchangeEmailService';
+import { authService } from './services/authService';
 import config from './config';
 
 function App() {
