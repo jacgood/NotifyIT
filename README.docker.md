@@ -61,15 +61,27 @@ You can customize the application by passing different environment variables:
 - `REACT_APP_BASE_URL`: The base URL where the application is hosted
 - `REACT_APP_AZURE_CLIENT_ID`: Your Azure AD application client ID
 - `REACT_APP_AZURE_TENANT_ID`: Your Azure AD tenant ID
+- `PORT`: The port to expose the application on (default: 3000)
 
-Example with a custom domain:
+Example with a custom domain and port:
 ```
-docker run -p 80:80 \
+docker run -p 8080:80 \
   -e REACT_APP_BASE_URL=https://notifyit.example.com \
+  -e PORT=8080 \
   -e REACT_APP_AZURE_CLIENT_ID=your-client-id \
   -e REACT_APP_AZURE_TENANT_ID=your-tenant-id \
   -d notifyit
 ```
+
+### Dynamic Configuration
+
+The application now supports runtime configuration through environment variables. When the container starts, it will:
+
+1. Inject your environment variables into the runtime configuration
+2. Make them available to the React application at runtime
+3. Automatically use the port specified in your environment
+
+This means you can deploy the same Docker image to different environments without rebuilding it.
 
 ## Deploying to a Production Environment
 

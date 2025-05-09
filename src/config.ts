@@ -1,12 +1,24 @@
 /**
  * Application configuration
- * Uses environment variables with fallbacks to default values
+ * Uses runtime configuration, environment variables, or fallbacks to default values
  */
+
+// Get runtime config if available (for Docker deployment)
+declare global {
+  interface Window {
+    RUNTIME_CONFIG?: {
+      REACT_APP_BASE_URL?: string;
+      REACT_APP_AZURE_CLIENT_ID?: string;
+      REACT_APP_AZURE_TENANT_ID?: string;
+      PORT?: string;
+    };
+  }
+}
 
 // Server configuration
 export const SERVER_CONFIG = {
-  baseUrl: process.env.REACT_APP_BASE_URL || 'http://localhost:3000',
-  port: process.env.PORT || 3000,
+  baseUrl: window.RUNTIME_CONFIG?.REACT_APP_BASE_URL || process.env.REACT_APP_BASE_URL || 'http://localhost:3000',
+  port: window.RUNTIME_CONFIG?.PORT || process.env.PORT || 3000,
   apiUrl: process.env.REACT_APP_API_URL || 'http://localhost:8080/api',
 };
 
