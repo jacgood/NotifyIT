@@ -17,16 +17,18 @@ declare global {
 
 // Server configuration
 export const SERVER_CONFIG = {
-  baseUrl: window.RUNTIME_CONFIG?.REACT_APP_BASE_URL || process.env.REACT_APP_BASE_URL || 'http://localhost:3000',
+  // Get base URL from runtime config, environment variables, or use current origin
+  baseUrl: window.RUNTIME_CONFIG?.REACT_APP_BASE_URL || process.env.REACT_APP_BASE_URL || window.location.origin,
   port: window.RUNTIME_CONFIG?.PORT || process.env.PORT || 3000,
   apiUrl: process.env.REACT_APP_API_URL || 'http://localhost:8080/api',
 };
 
 // Authentication configuration
 export const AUTH_CONFIG = {
-  clientId: process.env.REACT_APP_AZURE_CLIENT_ID || '',
-  tenantId: process.env.REACT_APP_AZURE_TENANT_ID || 'common',
-  redirectUri: process.env.REACT_APP_BASE_URL || window.location.origin,
+  clientId: window.RUNTIME_CONFIG?.REACT_APP_AZURE_CLIENT_ID || process.env.REACT_APP_AZURE_CLIENT_ID || '',
+  tenantId: window.RUNTIME_CONFIG?.REACT_APP_AZURE_TENANT_ID || process.env.REACT_APP_AZURE_TENANT_ID || 'common',
+  // Always use the current origin for the redirect URI to avoid mixed content issues
+  redirectUri: window.location.origin,
 };
 
 // Notification configuration

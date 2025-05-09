@@ -39,10 +39,18 @@ export const requestNotificationPermission = async (): Promise<NotificationPermi
  */
 export const playNotificationSound = (soundFile: string, volume: number = 1.0): void => {
   try {
-    // Build the full path to the sound file
+    // Build the full path to the sound file - ensure we use the correct protocol
     const baseUrl = SERVER_CONFIG.baseUrl || window.location.origin;
     const soundsPath = NOTIFICATION_CONFIG.soundsPath;
-    const soundPath = `${baseUrl}${soundsPath}${soundFile}`;
+    
+    // Make sure we're using the same protocol as the current page
+    let soundPath = `${baseUrl}${soundsPath}${soundFile}`;
+    
+    // If we're on HTTPS but the URL is HTTP, upgrade it
+    if (window.location.protocol === 'https:' && soundPath.startsWith('http:')) {
+      soundPath = soundPath.replace('http:', 'https:');
+    }
+    
     console.log('Attempting to play sound from:', soundPath);
     
     // Create a new Audio instance each time to avoid caching issues
@@ -57,6 +65,9 @@ export const playNotificationSound = (soundFile: string, volume: number = 1.0): 
       console.error('Audio error:', e);
       console.error('Audio error code:', audio.error?.code);
       console.error('Audio error message:', audio.error?.message);
+      
+      // Try with a relative path as fallback
+      tryFallbackAudio(soundFile, volume);
     });
     
     // Set volume (between 0.0 and 1.0)
@@ -74,36 +85,81 @@ export const playNotificationSound = (soundFile: string, volume: number = 1.0): 
         .catch(error => {
           console.error('Audio playback failed:', error);
           
-          // Try an alternative approach with a fallback sound
-          try {
-            // Create and play a short beep as fallback
-            const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-            const oscillator = audioContext.createOscillator();
-            const gainNode = audioContext.createGain();
-            
-            oscillator.type = 'sine';
-            oscillator.frequency.value = 800; // frequency in hertz
-            gainNode.gain.value = volume;
-            
-            oscillator.connect(gainNode);
-            gainNode.connect(audioContext.destination);
-            
-            oscillator.start();
-            setTimeout(() => oscillator.stop(), 200); // beep for 200ms
-            
-            console.log('Fallback audio played');
-          } catch (fallbackError) {
-            console.error('Fallback audio also failed:', fallbackError);
-            
-            // If autoplay was prevented, we can notify the user to interact with the page
-            if (error.name === 'NotAllowedError') {
-              alert('Please interact with the page to enable sound notifications');
-            }
-          }
+          // Try with a relative path as fallback
+          tryFallbackAudio(soundFile, volume);
         });
     }
   } catch (error) {
     console.error('Error playing notification sound:', error);
+    // Try with a relative path as fallback
+    tryFallbackAudio(soundFile, volume);
+  }
+};
+
+/**
+ * Try to play audio with a relative path as fallback
+ */
+const tryFallbackAudio = (soundFile: string, volume: number): void => {
+  try {
+    console.log('Trying fallback audio with relative path...');
+    // Try with a relative path
+    const relativePath = `/sounds/${soundFile}`;
+    console.log('Fallback audio path:', relativePath);
+    
+    const fallbackAudio = new Audio(relativePath);
+    fallbackAudio.volume = volume;
+    
+    const fallbackPromise = fallbackAudio.play();
+    if (fallbackPromise !== undefined) {
+      fallbackPromise
+        .then(() => {
+          console.log('Fallback audio playback started successfully');
+        })
+        .catch(fallbackError => {
+          console.error('Fallback audio playback failed:', fallbackError);
+          // Last resort: try to generate a beep
+          generateBeep(volume);
+        });
+    }
+  } catch (error) {
+    console.error('Error playing fallback audio:', error);
+    // Last resort: try to generate a beep
+    generateBeep(volume);
+  }
+};
+
+/**
+ * Generate a beep sound as a last resort
+ */
+const generateBeep = (volume: number): void => {
+  try {
+    console.log('Generating beep sound as last resort...');
+    // Create and play a short beep
+    const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+    
+    if (!AudioContext) {
+      console.error('AudioContext not supported in this browser');
+      return;
+    }
+    
+    const audioContext = new AudioContext();
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+    
+    oscillator.type = 'sine';
+    oscillator.frequency.value = 800; // frequency in hertz
+    gainNode.gain.value = volume;
+    
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+    
+    oscillator.start();
+    setTimeout(() => {
+      oscillator.stop();
+      console.log('Beep sound played successfully');
+    }, 300); // play for 300ms
+  } catch (error) {
+    console.error('Failed to generate beep sound:', error);
   }
 };
 
