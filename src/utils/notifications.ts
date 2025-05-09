@@ -37,8 +37,53 @@ export const requestNotificationPermission = async (): Promise<NotificationPermi
  * @param soundFile The sound file to play
  * @param volume Volume level (0.0 to 1.0)
  */
+// Flag to track if we've unlocked audio on iOS
+let iOSAudioUnlocked = false;
+
+/**
+ * Detect if the device is running iOS
+ */
+const isIOS = (): boolean => {
+  return [
+    'iPad Simulator',
+    'iPhone Simulator',
+    'iPod Simulator',
+    'iPad',
+    'iPhone',
+    'iPod'
+  ].includes(navigator.platform) || 
+  // iPad on iOS 13+ detection
+  (navigator.userAgent.includes('Mac') && 'ontouchend' in document);
+};
+
+/**
+ * Unlock audio on iOS - must be called from a user interaction event
+ */
+export const unlockAudioOnIOS = (): void => {
+  if (isIOS() && !iOSAudioUnlocked) {
+    console.log('Attempting to unlock audio on iOS...');
+    // Create a silent audio context
+    const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+    if (AudioContext) {
+      const audioContext = new AudioContext();
+      // Create an empty buffer
+      const buffer = audioContext.createBuffer(1, 1, 22050);
+      const source = audioContext.createBufferSource();
+      source.buffer = buffer;
+      source.connect(audioContext.destination);
+      // Play the empty sound
+      source.start(0);
+      console.log('iOS audio unlocked successfully');
+      iOSAudioUnlocked = true;
+    }
+  }
+};
+
 export const playNotificationSound = (soundFile: string, volume: number = 1.0): void => {
   try {
+    // Try to unlock audio on iOS
+    unlockAudioOnIOS();
+    
     // Always use the current origin to avoid mixed content issues
     const origin = window.location.origin;
     const soundsPath = NOTIFICATION_CONFIG.soundsPath;
@@ -48,7 +93,6 @@ export const playNotificationSound = (soundFile: string, volume: number = 1.0): 
     
     // Log the sound path for debugging
     console.log('Using current origin for sound path:', origin);
-    
     console.log('Attempting to play sound from:', soundPath);
     
     // Create a new Audio instance each time to avoid caching issues
@@ -68,6 +112,12 @@ export const playNotificationSound = (soundFile: string, volume: number = 1.0): 
       tryFallbackAudio(soundFile, volume);
     });
     
+    // For iOS, we need to set these attributes
+    if (isIOS()) {
+      audio.setAttribute('playsinline', 'true');
+      audio.setAttribute('preload', 'auto');
+    }
+    
     // Set volume (between 0.0 and 1.0)
     audio.volume = Math.min(1.0, Math.max(0.0, volume));
     console.log(`Setting volume to ${audio.volume}`);
@@ -82,6 +132,15 @@ export const playNotificationSound = (soundFile: string, volume: number = 1.0): 
         })
         .catch(error => {
           console.error('Audio playback failed:', error);
+          
+          if (isIOS()) {
+            console.log('iOS detected, trying vibration as fallback');
+            // Try to vibrate the device on iOS
+            if ('vibrate' in navigator) {
+              navigator.vibrate(200);
+              console.log('Device vibration triggered');
+            }
+          }
           
           // Try with a relative path as fallback
           tryFallbackAudio(soundFile, volume);
@@ -106,6 +165,15 @@ const tryFallbackAudio = (soundFile: string, volume: number): void => {
     console.log('Fallback audio path:', relativePath);
     
     const fallbackAudio = new Audio(relativePath);
+    
+    // For iOS, we need to set these attributes
+    if (isIOS()) {
+      fallbackAudio.setAttribute('playsinline', 'true');
+      fallbackAudio.setAttribute('preload', 'auto');
+      // Try to unlock audio again
+      unlockAudioOnIOS();
+    }
+    
     fallbackAudio.volume = volume;
     
     const fallbackPromise = fallbackAudio.play();
@@ -116,14 +184,28 @@ const tryFallbackAudio = (soundFile: string, volume: number): void => {
         })
         .catch(fallbackError => {
           console.error('Fallback audio playback failed:', fallbackError);
-          // Last resort: try to generate a beep
-          generateBeep(volume);
+          
+          // Try vibration on iOS
+          if (isIOS() && 'vibrate' in navigator) {
+            navigator.vibrate(200);
+            console.log('Device vibration triggered as fallback');
+          } else {
+            // Last resort: try to generate a beep
+            generateBeep(volume);
+          }
         });
     }
   } catch (error) {
     console.error('Error playing fallback audio:', error);
-    // Last resort: try to generate a beep
-    generateBeep(volume);
+    
+    // Try vibration on iOS
+    if (isIOS() && 'vibrate' in navigator) {
+      navigator.vibrate(200);
+      console.log('Device vibration triggered as fallback');
+    } else {
+      // Last resort: try to generate a beep
+      generateBeep(volume);
+    }
   }
 };
 
@@ -133,7 +215,15 @@ const tryFallbackAudio = (soundFile: string, volume: number): void => {
 const generateBeep = (volume: number): void => {
   try {
     console.log('Generating beep sound as last resort...');
-    // Create and play a short beep
+    
+    // On iOS, try vibration first as it's more reliable
+    if (isIOS() && 'vibrate' in navigator) {
+      navigator.vibrate([100, 50, 100]); // pattern: vibrate, pause, vibrate
+      console.log('Using vibration pattern instead of beep on iOS');
+      return;
+    }
+    
+    // Create and play a short beep for non-iOS devices
     const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
     
     if (!AudioContext) {
@@ -141,7 +231,16 @@ const generateBeep = (volume: number): void => {
       return;
     }
     
+    // Try to resume the audio context (needed for some browsers)
     const audioContext = new AudioContext();
+    if (audioContext.state === 'suspended') {
+      audioContext.resume().then(() => {
+        console.log('AudioContext resumed successfully');
+      }).catch(err => {
+        console.error('Failed to resume AudioContext:', err);
+      });
+    }
+    
     const oscillator = audioContext.createOscillator();
     const gainNode = audioContext.createGain();
     
@@ -159,6 +258,12 @@ const generateBeep = (volume: number): void => {
     }, 300); // play for 300ms
   } catch (error) {
     console.error('Failed to generate beep sound:', error);
+    
+    // Last resort: try vibration if available
+    if ('vibrate' in navigator) {
+      navigator.vibrate(200);
+      console.log('Falling back to simple vibration');
+    }
   }
 };
 

@@ -41,13 +41,26 @@ function App() {
     // Prime the audio context with a silent sound on first user interaction
     const handleUserInteraction = () => {
       console.log('User interaction detected, initializing audio');
-      // Play a silent sound to initialize audio context
+      
+      // Import the unlockAudioOnIOS function from notifications.ts
+      const { unlockAudioOnIOS } = require('./utils/notifications');
+      
+      // Try to unlock audio on iOS first (this is the most reliable method for iOS)
+      unlockAudioOnIOS();
+      
+      // Play a silent sound to initialize audio context for other browsers
       // Always use the current origin to avoid mixed content issues
       const origin = window.location.origin;
       const soundPath = `${origin}${config.notification.soundsPath}${config.notification.defaultSound}`;
       console.log('Initializing audio with path:', soundPath);
+      
+      // Create audio element with attributes needed for iOS
       const silentSound = new Audio(soundPath);
+      silentSound.setAttribute('playsinline', 'true');
+      silentSound.setAttribute('preload', 'auto');
       silentSound.volume = 0.01; // Nearly silent
+      
+      // Try to play the sound
       const playPromise = silentSound.play();
       if (playPromise !== undefined) {
         playPromise.then(() => {
@@ -56,6 +69,23 @@ function App() {
           silentSound.currentTime = 0;
         }).catch(err => {
           console.log('Failed to initialize audio context:', err);
+          
+          // If we can't play audio, try to at least initialize the AudioContext
+          try {
+            const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+            if (AudioContext) {
+              const audioContext = new AudioContext();
+              if (audioContext.state === 'suspended') {
+                audioContext.resume().then(() => {
+                  console.log('AudioContext resumed successfully');
+                }).catch(resumeErr => {
+                  console.error('Failed to resume AudioContext:', resumeErr);
+                });
+              }
+            }
+          } catch (audioContextErr) {
+            console.error('Error initializing AudioContext:', audioContextErr);
+          }
         });
       }
       
