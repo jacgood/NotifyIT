@@ -1,3 +1,5 @@
+import { NOTIFICATION_CONFIG, SERVER_CONFIG } from '../config';
+
 // Cache for audio elements to avoid recreating them
 const audioCache: Record<string, HTMLAudioElement> = {};
 
@@ -38,7 +40,9 @@ export const requestNotificationPermission = async (): Promise<NotificationPermi
 export const playNotificationSound = (soundFile: string, volume: number = 1.0): void => {
   try {
     // Build the full path to the sound file
-    const soundPath = `${window.location.origin}/sounds/${soundFile}`;
+    const baseUrl = SERVER_CONFIG.baseUrl || window.location.origin;
+    const soundsPath = NOTIFICATION_CONFIG.soundsPath;
+    const soundPath = `${baseUrl}${soundsPath}${soundFile}`;
     console.log('Attempting to play sound from:', soundPath);
     
     // Create a new Audio instance each time to avoid caching issues

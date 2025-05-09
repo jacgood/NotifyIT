@@ -1,22 +1,19 @@
 import * as msal from '@azure/msal-browser';
+import { AUTH_CONFIG } from '../config';
 
-// Get environment variables
-const clientId = process.env.REACT_APP_AZURE_CLIENT_ID || '';
-const tenantId = process.env.REACT_APP_AZURE_TENANT_ID || 'common';
-
-// Log environment variables for debugging
+// Log configuration for debugging
 console.log('Auth Config:', {
-  clientId: clientId,
-  tenantId: tenantId,
-  redirectUri: window.location.origin
+  clientId: AUTH_CONFIG.clientId,
+  tenantId: AUTH_CONFIG.tenantId,
+  redirectUri: AUTH_CONFIG.redirectUri
 });
 
 // MSAL configuration
 const msalConfig = {
   auth: {
-    clientId: clientId,
-    authority: `https://login.microsoftonline.com/${tenantId}`,
-    redirectUri: window.location.origin,
+    clientId: AUTH_CONFIG.clientId,
+    authority: `https://login.microsoftonline.com/${AUTH_CONFIG.tenantId}`,
+    redirectUri: AUTH_CONFIG.redirectUri,
   },
   cache: {
     cacheLocation: 'localStorage',

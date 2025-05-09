@@ -1,6 +1,7 @@
 import { Client } from '@microsoft/microsoft-graph-client';
 import { authService } from './authService';
 import { Email } from '../types';
+import config from '../config';
 
 /**
  * Exchange Online Email Service using Microsoft Graph API

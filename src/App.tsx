@@ -8,6 +8,7 @@ import { requestNotificationPermission, playNotificationSound, showNotification 
 import { loadNotificationSettings, saveNotificationSettings, loadEmailFilters, saveEmailFilters } from './utils/storage';
 import { emailService } from './services/emailService';
 import { exchangeEmailService } from './services/exchangeEmailService';
+import config from './config';
 
 function App() {
   const [emails, setEmails] = useState<Email[]>([]);
@@ -26,11 +27,11 @@ function App() {
     
     // Ensure the notification settings use the correct sound file
     const settings = loadNotificationSettings();
-    if (settings.customSound !== 'bell-notification-337658.mp3') {
+    if (settings.customSound !== config.notification.defaultSound) {
       console.log('Updating notification sound to use available sound file');
       const updatedSettings = {
         ...settings,
-        customSound: 'bell-notification-337658.mp3'
+        customSound: config.notification.defaultSound
       };
       setNotificationSettings(updatedSettings);
       saveNotificationSettings(updatedSettings);
@@ -40,7 +41,8 @@ function App() {
     const handleUserInteraction = () => {
       console.log('User interaction detected, initializing audio');
       // Play a silent sound to initialize audio context
-      const silentSound = new Audio('/sounds/bell-notification-337658.mp3');
+      const soundPath = `${config.server.baseUrl}${config.notification.soundsPath}${config.notification.defaultSound}`;
+      const silentSound = new Audio(soundPath);
       silentSound.volume = 0.01; // Nearly silent
       const playPromise = silentSound.play();
       if (playPromise !== undefined) {
@@ -237,7 +239,7 @@ function App() {
                 // Show system notification
                 showNotification('Critical IT Alert', {
                   body: `From: ${email.from}\nSubject: ${email.subject}`,
-                  icon: '/logo192.png',
+                  icon: `${config.server.baseUrl}/logo192.png`,
                   tag: email.id
                 });
               }
@@ -254,9 +256,9 @@ function App() {
     // Run the check immediately when component mounts
     checkEmails();
     
-    // Then check emails every 30 seconds
-    console.log('Setting up interval to check emails every 30 seconds');
-    const emailCheckInterval = setInterval(checkEmails, 30000);
+    // Then check emails based on configured interval
+    console.log(`Setting up interval to check emails every ${config.email.checkInterval/1000} seconds`);
+    const emailCheckInterval = setInterval(checkEmails, config.email.checkInterval);
     
     // Clean up interval when component unmounts
     return () => {
@@ -321,7 +323,7 @@ function App() {
             playNotificationSound(notificationSettings.customSound, notificationSettings.volume / 100);
             showNotification('Test Notification', {
               body: 'This is a test notification from NotifyIT',
-              icon: '/logo192.png'
+              icon: `${config.server.baseUrl}/logo192.png`
             });
           }}
         >
