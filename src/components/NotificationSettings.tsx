@@ -167,7 +167,7 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
               className={`block cursor-pointer w-14 h-7 rounded-full transition-colors duration-200 ${settings.enableNotifications ? 'bg-blue-500' : 'bg-gray-300'}`}
             >
               <span 
-                className={`block h-5 w-5 mt-1 ml-1 rounded-full bg-white transition-transform duration-200 ${settings.enableNotifications ? 'transform translate-x-7' : ''}`}
+                className={`absolute left-0.5 top-0.5 block h-6 w-6 rounded-full bg-white shadow transition-transform duration-200 ease-in-out ${settings.enableNotifications ? 'translate-x-7' : 'translate-x-0'}`}
               />
             </label>
           </div>
@@ -218,17 +218,29 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
 
       <div className="mb-4">
         <div className="flex items-center mb-1">
-          <input
-            type="checkbox"
-            id="overrideSilentMode"
-            checked={settings.overrideSilentMode}
-            onChange={handleOverrideSilentMode}
-            disabled={!settings.enableNotifications}
-            className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 mr-2 disabled:opacity-50"
-          />
-          <label htmlFor="overrideSilentMode" className="text-gray-700">Override Silent Mode (when possible)</label>
+          <div className="relative inline-block mr-3">
+            <input
+              type="checkbox"
+              id="overrideSilentMode"
+              checked={settings.overrideSilentMode}
+              onChange={handleOverrideSilentMode}
+              disabled={!settings.enableNotifications}
+              className="sr-only"
+            />
+            <label
+              htmlFor="overrideSilentMode"
+              className={`flex items-center justify-center w-5 h-5 rounded border ${settings.overrideSilentMode ? 'bg-blue-500 border-blue-500' : 'bg-white border-gray-300'} transition-colors duration-200 cursor-pointer ${!settings.enableNotifications ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
+              {settings.overrideSilentMode && (
+                <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"></path>
+                </svg>
+              )}
+            </label>
+          </div>
+          <label htmlFor="overrideSilentMode" className="text-gray-700 cursor-pointer">Override Silent Mode (when possible)</label>
         </div>
-        <p className="text-xs text-gray-500 italic">Note: This may not work on all devices due to OS restrictions</p>
+        <p className="text-xs text-gray-500 italic ml-8">Note: This may not work on all devices due to OS restrictions</p>
       </div>
 
       <div className="mb-4">
