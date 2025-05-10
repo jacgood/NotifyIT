@@ -356,22 +356,85 @@ export const wakeScreen = (): void => {
 };
 
 /**
+ * Detects if the device is running Android
+ */
+const isAndroid = (): boolean => {
+  return /Android/i.test(navigator.userAgent);
+};
+
+/**
+ * Detects if the device is a mobile device (iOS or Android)
+ */
+const isMobileDevice = (): boolean => {
+  return isIOS() || isAndroid();
+};
+
+/**
  * Creates and displays a system notification
  * @param title Notification title
  * @param options Notification options
+ * @param soundFile Optional custom sound file to play with the notification
+ * @param volume Optional volume level for the sound (0.0 to 1.0)
  */
-export const showNotification = (title: string, options: NotificationOptions): void => {
-  if ('Notification' in window && Notification.permission === 'granted') {
-    try {
-      const notification = new Notification(title, options);
+export const showNotification = async (
+  title: string, 
+  options: NotificationOptions, 
+  soundFile?: string, 
+  volume: number = 1.0
+): Promise<void> => {
+  if (!('Notification' in window) || Notification.permission !== 'granted') {
+    console.log('Notifications not supported or permission not granted');
+    return;
+  }
+
+  try {
+    // For mobile devices, we need special handling to avoid duplicate sounds
+    if (isMobileDevice()) {
+      console.log('Mobile device detected, using custom notification handling');
       
-      // Optional: Do something when the notification is clicked
+      // Always set silent option to true on mobile to prevent default sound
+      const mobileOptions: NotificationOptions = {
+        ...options,
+        silent: true, // This prevents the default notification sound
+      };
+      
+      // If a sound file is provided, play it first
+      if (soundFile) {
+        // Play our custom sound first
+        await playNotificationSound(soundFile, volume);
+        
+        // Small delay to ensure sound starts playing before notification appears
+        // This helps with the user experience on mobile
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      
+      // Now show the silent notification
+      const notification = new Notification(title, mobileOptions);
+      
+      // Handle notification click
       notification.onclick = () => {
         console.log('Notification clicked');
         window.focus();
       };
-    } catch (error) {
-      console.error('Error showing notification:', error);
+    } else {
+      // For desktop browsers, we can use the standard approach
+      console.log('Desktop browser detected, using standard notification');
+      
+      // Create the notification with default behavior
+      const notification = new Notification(title, options);
+      
+      // Handle notification click
+      notification.onclick = () => {
+        console.log('Notification clicked');
+        window.focus();
+      };
+      
+      // If a sound file is provided, play it alongside the notification
+      if (soundFile) {
+        playNotificationSound(soundFile, volume);
+      }
     }
+  } catch (error) {
+    console.error('Error showing notification:', error);
   }
 };

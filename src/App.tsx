@@ -267,15 +267,17 @@ function App() {
               console.log(`Is in notification window: ${isInNotificationWindow}`);
 
               if (isInNotificationWindow) {
-                // Play notification sound
-                playNotificationSound(notificationSettings.customSound, notificationSettings.volume / 100);
-
-                // Show system notification
-                showNotification('Critical IT Alert', {
-                  body: `From: ${email.from}\nSubject: ${email.subject}`,
-                  icon: `${config.server.baseUrl}/logo192.png`,
-                  tag: email.id
-                });
+                // Show system notification with custom sound
+                showNotification(
+                  'Critical IT Alert', 
+                  {
+                    body: `From: ${email.from}\nSubject: ${email.subject}`,
+                    icon: `${config.server.baseUrl}/logo192.png`,
+                    tag: email.id
+                  },
+                  notificationSettings.customSound,
+                  notificationSettings.volume / 100
+                );
               }
             }
           });
@@ -354,11 +356,15 @@ function App() {
         <button 
           className="bg-red-600 hover:bg-red-700 text-white border-none rounded px-6 py-3 mt-2 cursor-pointer text-base transition-colors"
           onClick={() => {
-            playNotificationSound(notificationSettings.customSound, notificationSettings.volume / 100);
-            showNotification('Test Notification', {
-              body: 'This is a test notification from NotifyIT',
-              icon: `${config.server.baseUrl}/logo192.png`
-            });
+            showNotification(
+              'Test Notification',
+              {
+                body: 'This is a test notification from NotifyIT',
+                icon: `${config.server.baseUrl}/logo192.png`
+              },
+              notificationSettings.customSound,
+              notificationSettings.volume / 100
+            );
           }}
         >
           Test Alert Sound
