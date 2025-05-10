@@ -15,6 +15,14 @@ export interface NotificationSetting {
   volume: number;    // 0-100
   overrideSilentMode: boolean;
   customSound: string;
+  customSounds: CustomSound[];
+}
+
+export interface CustomSound {
+  id: string;        // Unique identifier for the sound
+  name: string;      // Display name for the sound
+  filename: string;  // Filename with extension
+  data?: string;     // Base64 encoded sound data (optional, only used during upload)
 }
 
 export interface EmailFilter {

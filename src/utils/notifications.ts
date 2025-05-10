@@ -79,24 +79,74 @@ export const unlockAudioOnIOS = (): void => {
   }
 };
 
-export const playNotificationSound = (soundFile: string, volume: number = 1.0): void => {
+/**
+ * Checks if a sound file is a custom sound (starts with 'custom:')
+ * @param soundFile The sound file to check
+ * @returns True if the sound is a custom sound
+ */
+const isCustomSound = (soundFile: string): boolean => {
+  return soundFile.startsWith('custom:');
+};
+
+/**
+ * Extracts the custom sound ID from a sound file string
+ * @param soundFile The sound file string (format: 'custom:soundId')
+ * @returns The sound ID
+ */
+const extractCustomSoundId = (soundFile: string): string => {
+  return soundFile.split(':')[1];
+};
+
+/**
+ * Plays a notification sound at the specified volume
+ * @param soundFile The sound file to play (can be a built-in sound or 'custom:soundId')
+ * @param volume Volume level (0.0 to 1.0)
+ */
+export const playNotificationSound = async (soundFile: string, volume: number = 1.0): Promise<void> => {
   try {
     // Try to unlock audio on iOS
     unlockAudioOnIOS();
     
-    // Always use the current origin to avoid mixed content issues
-    const origin = window.location.origin;
-    const soundsPath = NOTIFICATION_CONFIG.soundsPath;
+    let audio: HTMLAudioElement;
     
-    // Build the path using the current origin
-    let soundPath = `${origin}${soundsPath}${soundFile}`;
-    
-    // Log the sound path for debugging
-    console.log('Using current origin for sound path:', origin);
-    console.log('Attempting to play sound from:', soundPath);
-    
-    // Create a new Audio instance each time to avoid caching issues
-    const audio = new Audio(soundPath);
+    // Check if this is a custom sound
+    if (isCustomSound(soundFile)) {
+      // Extract the sound ID
+      const soundId = extractCustomSoundId(soundFile);
+      console.log('Playing custom sound with ID:', soundId);
+      
+      // Import the getSoundFromIndexedDB function dynamically to avoid circular dependencies
+      const { getSoundFromIndexedDB } = await import('./soundUpload');
+      
+      // Get the sound data from IndexedDB
+      const soundData = await getSoundFromIndexedDB(soundId);
+      
+      if (!soundData) {
+        console.error('Custom sound not found in IndexedDB:', soundId);
+        // Fall back to default sound
+        const defaultSound = NOTIFICATION_CONFIG.defaultSound;
+        return playNotificationSound(defaultSound, volume);
+      }
+      
+      // Create audio element from base64 data
+      audio = new Audio(soundData);
+      console.log('Created audio element from custom sound data');
+    } else {
+      // This is a built-in sound
+      // Always use the current origin to avoid mixed content issues
+      const origin = window.location.origin;
+      const soundsPath = NOTIFICATION_CONFIG.soundsPath;
+      
+      // Build the path using the current origin
+      let soundPath = `${origin}${soundsPath}${soundFile}`;
+      
+      // Log the sound path for debugging
+      console.log('Using current origin for sound path:', origin);
+      console.log('Attempting to play sound from:', soundPath);
+      
+      // Create a new Audio instance each time to avoid caching issues
+      audio = new Audio(soundPath);
+    }
     
     // Add event listeners for debugging
     audio.addEventListener('canplaythrough', () => {
@@ -108,8 +158,14 @@ export const playNotificationSound = (soundFile: string, volume: number = 1.0): 
       console.error('Audio error code:', audio.error?.code);
       console.error('Audio error message:', audio.error?.message);
       
-      // Try with a relative path as fallback
-      tryFallbackAudio(soundFile, volume);
+      // Try with a relative path as fallback if not a custom sound
+      if (!isCustomSound(soundFile)) {
+        tryFallbackAudio(soundFile, volume);
+      } else {
+        // For custom sounds, fall back to the default sound
+        const defaultSound = NOTIFICATION_CONFIG.defaultSound;
+        playNotificationSound(defaultSound, volume);
+      }
     });
     
     // For iOS, we need to set these attributes
@@ -157,6 +213,13 @@ export const playNotificationSound = (soundFile: string, volume: number = 1.0): 
  * Try to play audio with a relative path as fallback
  */
 const tryFallbackAudio = (soundFile: string, volume: number): void => {
+  // Don't try fallback for custom sounds
+  if (isCustomSound(soundFile)) {
+    console.log('Not attempting fallback for custom sound');
+    // Generate a beep as last resort
+    generateBeep(volume);
+    return;
+  }
   try {
     console.log('Trying fallback audio with relative path...');
     // Use the current origin with a relative path

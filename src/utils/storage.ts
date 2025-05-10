@@ -7,7 +7,8 @@ const DEFAULT_NOTIFICATION_SETTINGS: NotificationSetting = {
   endTime: '06:00',
   volume: 80,
   overrideSilentMode: true,
-  customSound: 'bell-notification-337658.mp3'
+  customSound: 'bell-notification-337658.mp3',
+  customSounds: [] // Initialize with empty array for custom sounds
 };
 
 // Default email filters
