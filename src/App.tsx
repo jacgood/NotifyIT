@@ -3,8 +3,9 @@ import EmailSettings from './components/EmailSettings';
 import NotificationSettings from './components/NotificationSettings';
 import EmailList from './components/EmailList';
 import ConnectionStatus from './components/ConnectionStatus';
+import PermissionsOnboarding from './components/PermissionsOnboarding';
 import { Email, NotificationSetting } from './types';
-import { requestNotificationPermission, playNotificationSound, showNotification, preloadDefaultSound } from './utils/notifications';
+import { requestNotificationPermission, playNotificationSound, showNotification, preloadDefaultSound, unlockAudioOnIOS } from './utils/notifications';
 import { loadNotificationSettings, saveNotificationSettings, loadEmailFilters, saveEmailFilters } from './utils/storage';
 import { emailService } from './services/emailService';
 import { exchangeEmailService } from './services/exchangeEmailService';
@@ -18,18 +19,28 @@ function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [isExchangeConnected, setIsExchangeConnected] = useState(false);
   const [activeEmailService, setActiveEmailService] = useState<'mock' | 'exchange'>('mock');
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [audioInitialized, setAudioInitialized] = useState(false);
 
-  // Request notification permissions and preload sounds when app loads
+  // Check if we should show onboarding on app load
   useEffect(() => {
-    // Request notification permission
-    requestNotificationPermission().then(permission => {
-      console.log('Notification permission status:', permission);
-      
-      // Preload default notification sound after permission is granted
-      if (permission === 'granted') {
-        preloadDefaultSound();
-      }
-    });
+    const onboardingComplete = localStorage.getItem('permissionsOnboardingComplete') === 'true';
+    const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    
+    // Show onboarding for mobile devices if not completed before
+    if (isMobileDevice && !onboardingComplete) {
+      setShowOnboarding(true);
+    } else {
+      // For desktop or if onboarding already completed, just request permissions
+      requestNotificationPermission().then(permission => {
+        console.log('Notification permission status:', permission);
+        
+        // Preload default notification sound after permission is granted
+        if (permission === 'granted') {
+          preloadDefaultSound();
+        }
+      });
+    }
 
     // Initial fetch of emails
     fetchEmails();
@@ -45,73 +56,43 @@ function App() {
       setNotificationSettings(updatedSettings);
       saveNotificationSettings(updatedSettings);
     }
-    
-    // Prime the audio context with a silent sound on first user interaction
-    const handleUserInteraction = () => {
-      console.log('User interaction detected, initializing audio');
-      
-      // Import the unlockAudioOnIOS function from notifications.ts
-      const { unlockAudioOnIOS } = require('./utils/notifications');
-      
-      // Try to unlock audio on iOS first (this is the most reliable method for iOS)
-      unlockAudioOnIOS();
-      
-      // Play a silent sound to initialize audio context for other browsers
-      // Always use the current origin to avoid mixed content issues
-      const origin = window.location.origin;
-      const soundPath = `${origin}${config.notification.soundsPath}${config.notification.defaultSound}`;
-      console.log('Initializing audio with path:', soundPath);
-      
-      // Create audio element with attributes needed for iOS
-      const silentSound = new Audio(soundPath);
-      silentSound.setAttribute('playsinline', 'true');
-      silentSound.setAttribute('preload', 'auto');
-      silentSound.volume = 0.01; // Nearly silent
-      
-      // Try to play the sound
-      const playPromise = silentSound.play();
-      if (playPromise !== undefined) {
-        playPromise.then(() => {
-          console.log('Audio context initialized successfully');
-          silentSound.pause();
-          silentSound.currentTime = 0;
-        }).catch(err => {
-          console.log('Failed to initialize audio context:', err);
-          
-          // If we can't play audio, try to at least initialize the AudioContext
-          try {
-            const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-            if (AudioContext) {
-              const audioContext = new AudioContext();
-              if (audioContext.state === 'suspended') {
-                audioContext.resume().then(() => {
-                  console.log('AudioContext resumed successfully');
-                }).catch(resumeErr => {
-                  console.error('Failed to resume AudioContext:', resumeErr);
-                });
-              }
-            }
-          } catch (audioContextErr) {
-            console.error('Error initializing AudioContext:', audioContextErr);
-          }
-        });
-      }
-      
-      // Remove event listeners after first interaction
-      document.removeEventListener('click', handleUserInteraction);
-      document.removeEventListener('keydown', handleUserInteraction);
-    };
-    
-    // Add event listeners for user interaction
-    document.addEventListener('click', handleUserInteraction);
-    document.addEventListener('keydown', handleUserInteraction);
-    
-    // Clean up event listeners
-    return () => {
-      document.removeEventListener('click', handleUserInteraction);
-      document.removeEventListener('keydown', handleUserInteraction);
-    };
   }, []);
+  
+  // Set up automatic email checking
+  useEffect(() => {
+    const checkEmailsAutomatically = async () => {
+      console.log('Checking for new emails automatically...');
+      try {
+        const service = isExchangeConnected ? exchangeEmailService : emailService;
+        console.log(`Using ${isExchangeConnected ? 'Exchange' : 'Mock'} email service`);
+        
+        const newEmails = await service.checkForNewEmails();
+        console.log(`Found ${newEmails.length} new emails`);
+
+        if (newEmails.length > 0) {
+          // Process new emails for notifications
+          processNewEmails(newEmails);
+        } else {
+          console.log('No new emails found');
+        }
+      } catch (error) {
+        console.error('Error checking for new emails:', error);
+      }
+    };
+    
+    console.log('Setting up automatic email checking...');
+    const checkEmailsInterval = setInterval(checkEmailsAutomatically, config.email.checkInterval);
+    
+    // Run once immediately
+    checkEmailsAutomatically();
+    
+    // Clean up on unmount
+    return () => {
+      console.log('Clearing email check interval');
+      clearInterval(checkEmailsInterval);
+    };
+  }, [isExchangeConnected]); // Re-setup when exchange connection changes
+
   
   // When Exchange connection status changes, update active email service
   useEffect(() => {
@@ -311,16 +292,149 @@ function App() {
     };
   }, [notificationSettings, emailFilters, isExchangeConnected]); // Added isExchangeConnected to dependencies
 
+  // Process new emails and send notifications if needed
+  const processNewEmails = (newEmails: Email[]) => {
+    // Add new emails to the state
+    setEmails(prevEmails => {
+      const updatedEmails = [...newEmails, ...prevEmails];
+      console.log(`Updated email count: ${updatedEmails.length}`);
+      return updatedEmails;
+    });
+
+    // Check each email against filters to determine if notification should be sent
+    newEmails.forEach(email => {
+      console.log(`Processing email for notification: ${email.subject}`);
+      console.log(`Email priority: ${email.priority}`);
+      console.log(`Current filters: ${JSON.stringify(emailFilters)}`);
+      
+      // Check if notification should be sent based on filters
+      let shouldNotify = false;
+      
+      // Check if high priority only setting is enabled
+      const isHighPriorityOnly = emailFilters.highPriorityOnly;
+      console.log(`High priority only setting: ${isHighPriorityOnly}`);
+      
+      // Check if email has a keyword in the subject
+      const hasKeywordInSubject = emailFilters.subjects.some(keyword => 
+        email.subject.toLowerCase().includes(keyword.toLowerCase())
+      );
+      console.log(`Has keyword in subject: ${hasKeywordInSubject}`);
+      
+      // Check sender match
+      const isSenderMatch = emailFilters.senders.length === 0 || 
+        emailFilters.senders.some(sender => 
+          email.from.toLowerCase().includes(sender.toLowerCase())
+        );
+      console.log(`Is sender match: ${isSenderMatch}`);
+      
+      // Determine if notification should be sent
+      if (hasKeywordInSubject && isSenderMatch) {
+        console.log('Notifying because email has keyword in subject and matches sender filter');
+        shouldNotify = true;
+      } else if (email.priority === 'high' && !isHighPriorityOnly) {
+        console.log('Notifying because email is high priority and high priority only is disabled');
+        shouldNotify = true;
+      } else if (email.priority === 'high' && isHighPriorityOnly) {
+        console.log('Notifying because email is high priority and high priority only is enabled');
+        shouldNotify = true;
+      }
+      
+      console.log(`Should notify for this email: ${shouldNotify}`);
+      
+      // Send notification if needed
+      if (shouldNotify) {
+        console.log(`Sending notification for email: ${email.subject}`);
+        
+        // Check if we're in the notification window (8am to 10pm)
+        const now = new Date();
+        const hour = now.getHours();
+        const isInNotificationWindow = hour >= 8 && hour < 22;
+        console.log(`Is in notification window: ${isInNotificationWindow}`);
+        
+        if (isInNotificationWindow) {
+          showNotification(
+            'Critical IT Alert', 
+            {
+              body: `From: ${email.from}\nSubject: ${email.subject}`,
+              icon: `${window.location.origin}/logo192.png`,
+              tag: email.id
+            },
+            notificationSettings.customSound,
+            notificationSettings.volume / 100
+          );
+        }
+      }
+    });
+  };
+  
   // Handle authentication status change
   const handleAuthChange = (isAuthenticated: boolean) => {
     setIsExchangeConnected(isAuthenticated);
   };
 
+  // Handle user interaction to initialize audio
+  const initializeAudio = () => {
+    if (!audioInitialized) {
+      console.log('User interaction detected, initializing audio');
+      
+      // Try to unlock audio on iOS
+      unlockAudioOnIOS();
+      
+      // Create and play a silent audio context
+      try {
+        const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioContext) {
+          const audioContext = new AudioContext();
+          if (audioContext.state === 'suspended') {
+            audioContext.resume().then(() => {
+              console.log('AudioContext resumed successfully');
+            });
+          }
+          
+          // Preload the default sound
+          const soundPath = `${window.location.origin}/sounds/${notificationSettings.customSound}`;
+          console.log('Initializing audio with path:', soundPath);
+          
+          const audio = new Audio(soundPath);
+          audio.volume = 0;
+          audio.load();
+          
+          // Play and immediately pause to initialize
+          const playPromise = audio.play();
+          if (playPromise !== undefined) {
+            playPromise.then(() => {
+              audio.pause();
+              console.log('Audio context initialized successfully');
+              setAudioInitialized(true);
+            }).catch(err => {
+              console.warn('Audio initialization failed:', err);
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Error initializing audio context:', error);
+      }
+    }
+  };
+  
+  // Handle completion of the permissions onboarding
+  const handleOnboardingComplete = () => {
+    setShowOnboarding(false);
+    initializeAudio();
+  };
+
   return (
-    <div className="max-w-screen-md mx-auto font-sans">
-      <header className="bg-slate-800 text-white p-4 text-center">
-        <h1 className="text-2xl font-bold m-0">NotifyIT</h1>
-        <p className="mt-1 text-base">Critical Email Notifications for IT Team</p>
+    <div 
+      className="min-h-screen bg-gray-100 flex flex-col"
+      onClick={initializeAudio} // Initialize audio on any user interaction
+    >
+      {showOnboarding && (
+        <PermissionsOnboarding onComplete={handleOnboardingComplete} />
+      )}
+      
+      <header className="bg-slate-800 text-white p-4 shadow-md">
+        <h1 className="text-2xl font-bold">NotifyIT</h1>
+        <p className="text-sm text-slate-300">Critical IT Alert Notification System</p>
       </header>
       
       <main className="p-4">
