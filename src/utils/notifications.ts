@@ -102,10 +102,64 @@ const extractCustomSoundId = (soundFile: string): string => {
  * @param soundFile The sound file to play (can be a built-in sound or 'custom:soundId')
  * @param volume Volume level (0.0 to 1.0)
  */
-export const playNotificationSound = async (soundFile: string, volume: number = 1.0): Promise<void> => {
+// Track if we're in a user interaction context
+let isInUserInteractionContext = false;
+
+// Set this flag to true when a user interaction happens
+document.addEventListener('click', () => {
+  isInUserInteractionContext = true;
+  // Reset after a short delay
+  setTimeout(() => {
+    isInUserInteractionContext = false;
+  }, 5000); // Consider user interaction context valid for 5 seconds
+});
+
+// Create a preloaded audio element for mobile devices
+let preloadedDefaultSound: HTMLAudioElement | null = null;
+
+/**
+ * Preload the default notification sound for better mobile playback
+ * This should be called early in the application lifecycle, ideally after a user interaction
+ */
+export const preloadDefaultSound = (): void => {
+  try {
+    if (!preloadedDefaultSound) {
+      const defaultSoundPath = `${window.location.origin}${NOTIFICATION_CONFIG.soundsPath}${NOTIFICATION_CONFIG.defaultSound}`;
+      preloadedDefaultSound = new Audio(defaultSoundPath);
+      preloadedDefaultSound.load();
+      console.log('Default notification sound preloaded');
+    }
+  } catch (error) {
+    console.error('Failed to preload default sound:', error);
+  }
+};
+
+/**
+ * Plays a notification sound at the specified volume
+ * @param soundFile The sound file to play (can be a built-in sound or 'custom:soundId')
+ * @param volume Volume level (0.0 to 1.0)
+ * @param forcePlay Whether to force playback even on mobile devices
+ */
+export const playNotificationSound = async (soundFile: string, volume: number = 1.0, forcePlay: boolean = false): Promise<void> => {
   try {
     // Try to unlock audio on iOS
     unlockAudioOnIOS();
+    
+    // Force an audio context resume for mobile devices
+    if (isMobileDevice() || forcePlay) {
+      try {
+        const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioContext) {
+          const audioContext = new AudioContext();
+          if (audioContext.state === 'suspended') {
+            await audioContext.resume();
+            console.log('AudioContext resumed successfully');
+          }
+        }
+      } catch (err) {
+        console.warn('Error resuming AudioContext:', err);
+      }
+    }
     
     let audio: HTMLAudioElement;
     
@@ -396,20 +450,53 @@ export const showNotification = async (
       const mobileOptions: NotificationOptions = {
         ...options,
         silent: true, // This prevents the default notification sound
+        requireInteraction: true, // Keep notification visible until user interacts with it
       };
       
-      // If a sound file is provided, play it first
-      if (soundFile) {
-        // Play our custom sound first
-        await playNotificationSound(soundFile, volume);
-        
-        // Small delay to ensure sound starts playing before notification appears
-        // This helps with the user experience on mobile
-        await new Promise(resolve => setTimeout(resolve, 100));
-      }
+      // Create the notification first (silent)
+      let notification = new Notification(title, mobileOptions);
       
-      // Now show the silent notification
-      const notification = new Notification(title, mobileOptions);
+      // Then play the sound (this sequence works better on iOS/Android)
+      if (soundFile) {
+        try {
+          console.log(`Playing notification sound on mobile: ${soundFile}`);
+          
+          // Special handling for iOS
+          if (isIOS()) {
+            // On iOS, we need to play the sound immediately after a user interaction or notification creation
+            // This helps bypass iOS audio restrictions
+            
+            // If we're in a user interaction context, we can play directly
+            if (isInUserInteractionContext) {
+              console.log('Playing sound in user interaction context');
+              await playNotificationSound(soundFile, volume);
+            } else {
+              // Otherwise, use the preloaded sound if it's the default sound
+              if (soundFile === NOTIFICATION_CONFIG.defaultSound && preloadedDefaultSound) {
+                console.log('Using preloaded default sound');
+                preloadedDefaultSound.volume = volume;
+                await preloadedDefaultSound.play().catch(err => {
+                  console.warn('Error playing preloaded sound:', err);
+                  // Fallback to regular playback
+                  return playNotificationSound(soundFile, volume);
+                });
+              } else {
+                // For custom sounds, try normal playback
+                await playNotificationSound(soundFile, volume);
+              }
+            }
+          } else {
+            // For Android and other mobile devices
+            await playNotificationSound(soundFile, volume);
+          }
+        } catch (error) {
+          console.error('Error playing notification sound on mobile:', error);
+          // Try vibration as fallback
+          if ('vibrate' in navigator) {
+            navigator.vibrate([200, 100, 200]);
+          }
+        }
+      }
       
       // Handle notification click
       notification.onclick = () => {

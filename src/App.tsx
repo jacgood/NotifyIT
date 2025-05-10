@@ -4,7 +4,7 @@ import NotificationSettings from './components/NotificationSettings';
 import EmailList from './components/EmailList';
 import ConnectionStatus from './components/ConnectionStatus';
 import { Email, NotificationSetting } from './types';
-import { requestNotificationPermission, playNotificationSound, showNotification } from './utils/notifications';
+import { requestNotificationPermission, playNotificationSound, showNotification, preloadDefaultSound } from './utils/notifications';
 import { loadNotificationSettings, saveNotificationSettings, loadEmailFilters, saveEmailFilters } from './utils/storage';
 import { emailService } from './services/emailService';
 import { exchangeEmailService } from './services/exchangeEmailService';
@@ -19,9 +19,17 @@ function App() {
   const [isExchangeConnected, setIsExchangeConnected] = useState(false);
   const [activeEmailService, setActiveEmailService] = useState<'mock' | 'exchange'>('mock');
 
-  // Request notification permissions when app loads
+  // Request notification permissions and preload sounds when app loads
   useEffect(() => {
-    requestNotificationPermission();
+    // Request notification permission
+    requestNotificationPermission().then(permission => {
+      console.log('Notification permission status:', permission);
+      
+      // Preload default notification sound after permission is granted
+      if (permission === 'granted') {
+        preloadDefaultSound();
+      }
+    });
 
     // Initial fetch of emails
     fetchEmails();

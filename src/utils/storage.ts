@@ -13,7 +13,7 @@ const DEFAULT_NOTIFICATION_SETTINGS: NotificationSetting = {
 
 // Default email filters
 const DEFAULT_EMAIL_FILTERS = {
-  senders: ['alerts@company.com', 'monitoring@company.com'],
+  senders: [], // Empty array means notify on any sender
   subjects: ['URGENT', 'CRITICAL', 'DOWNTIME'],
   highPriorityOnly: true
 };
