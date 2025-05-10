@@ -280,7 +280,7 @@ function App() {
                   'Critical IT Alert', 
                   {
                     body: `From: ${email.from}\nSubject: ${email.subject}`,
-                    icon: `${config.server.baseUrl}/logo192.png`,
+                    icon: `${window.location.origin}/logo192.png`,
                     tag: email.id
                   },
                   notificationSettings.customSound,
@@ -368,7 +368,7 @@ function App() {
               'Test Notification',
               {
                 body: 'This is a test notification from NotifyIT',
-                icon: `${config.server.baseUrl}/logo192.png`
+                icon: `${window.location.origin}/logo192.png`
               },
               notificationSettings.customSound,
               notificationSettings.volume / 100
