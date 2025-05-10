@@ -11,6 +11,8 @@ import { emailService } from './services/emailService';
 import { exchangeEmailService } from './services/exchangeEmailService';
 import { authService } from './services/authService';
 import config from './config';
+// Import Capacitor utilities
+import { isNativePlatform, isIOS, initializeCapacitor, showLocalNotification, addLocalNotificationListeners } from './capacitor';
 
 function App() {
   const [emails, setEmails] = useState<Email[]>([]);
@@ -22,24 +24,38 @@ function App() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [audioInitialized, setAudioInitialized] = useState(false);
 
-  // Check if we should show onboarding on app load
+  // Initialize Capacitor and check if we should show onboarding on app load
   useEffect(() => {
+    // Initialize Capacitor if on a native platform
+    if (isNativePlatform()) {
+      // Initialize Capacitor plugins
+      initializeCapacitor().catch(error => {
+        console.error('Error initializing Capacitor:', error);
+      });
+      
+      // Add local notification listeners
+      addLocalNotificationListeners();
+    }
+    
     const onboardingComplete = localStorage.getItem('permissionsOnboardingComplete') === 'true';
-    const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    const isMobileDevice = isNativePlatform() || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
     
     // Show onboarding for mobile devices if not completed before
     if (isMobileDevice && !onboardingComplete) {
       setShowOnboarding(true);
     } else {
       // For desktop or if onboarding already completed, just request permissions
-      requestNotificationPermission().then(permission => {
-        console.log('Notification permission status:', permission);
-        
-        // Preload default notification sound after permission is granted
-        if (permission === 'granted') {
-          preloadDefaultSound();
-        }
-      });
+      // Use Capacitor for notifications on native platforms
+      if (!isNativePlatform()) {
+        requestNotificationPermission().then(permission => {
+          console.log('Notification permission status:', permission);
+          
+          // Preload default notification sound after permission is granted
+          if (permission === 'granted') {
+            preloadDefaultSound();
+          }
+        });
+      }
     }
 
     // Initial fetch of emails
@@ -352,16 +368,27 @@ function App() {
         console.log(`Is in notification window: ${isInNotificationWindow}`);
         
         if (isInNotificationWindow) {
-          showNotification(
-            'Critical IT Alert', 
-            {
-              body: `From: ${email.from}\nSubject: ${email.subject}`,
-              icon: `${window.location.origin}/logo192.png`,
-              tag: email.id
-            },
-            notificationSettings.customSound,
-            notificationSettings.volume / 100
-          );
+          if (isNativePlatform()) {
+            // Use Capacitor's native notifications on iOS/Android
+            showLocalNotification(
+              'Critical IT Alert',
+              `From: ${email.from}\nSubject: ${email.subject}`,
+              parseInt(email.id, 10) || Math.floor(Math.random() * 10000),
+              notificationSettings.customSound
+            );
+          } else {
+            // Use web notifications on desktop browsers
+            showNotification(
+              'Critical IT Alert', 
+              {
+                body: `From: ${email.from}\nSubject: ${email.subject}`,
+                icon: `${window.location.origin}/logo192.png`,
+                tag: email.id
+              },
+              notificationSettings.customSound,
+              notificationSettings.volume / 100
+            );
+          }
         }
       }
     });
@@ -478,15 +505,26 @@ function App() {
         <button 
           className="bg-red-600 hover:bg-red-700 text-white border-none rounded px-6 py-3 mt-2 cursor-pointer text-base transition-colors"
           onClick={() => {
-            showNotification(
-              'Test Notification',
-              {
-                body: 'This is a test notification from NotifyIT',
-                icon: `${window.location.origin}/logo192.png`
-              },
-              notificationSettings.customSound,
-              notificationSettings.volume / 100
-            );
+            if (isNativePlatform()) {
+              // Use Capacitor's native notifications on iOS/Android
+              showLocalNotification(
+                'Test Notification',
+                'This is a test notification from NotifyIT',
+                Math.floor(Math.random() * 10000),
+                notificationSettings.customSound
+              );
+            } else {
+              // Use web notifications on desktop browsers
+              showNotification(
+                'Test Notification',
+                {
+                  body: 'This is a test notification from NotifyIT',
+                  icon: `${window.location.origin}/logo192.png`
+                },
+                notificationSettings.customSound,
+                notificationSettings.volume / 100
+              );
+            }
           }}
         >
           Test Alert Sound
